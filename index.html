@@ -109,6 +109,23 @@ button.danger.solid{background:var(--bad);color:var(--surface);border-color:var(
 .confirm{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--bad)}
 .toc-hint{margin:8px 2px 0}
 .toc-toggle{display:none;width:100%;margin-bottom:8px;font-size:13px;padding:6px 10px}
+.due-panel{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-color:var(--accent)}
+.ox-text{font-size:17px;line-height:1.85}
+.ox-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+.ox-btn{font-size:34px;font-weight:700;padding:14px 10px;display:flex;flex-direction:column;align-items:center;gap:2px;line-height:1.1}
+.ox-btn span{font-size:13px;font-weight:500;color:var(--muted)}
+.ox-btn[data-pick="O"]{color:var(--ok)} .ox-btn[data-pick="X"]{color:var(--bad)}
+.ox-btn[data-pick="O"]:hover{border-color:var(--ok);background:var(--ok-soft)} .ox-btn[data-pick="X"]:hover{border-color:var(--bad);background:var(--bad-soft)}
+.wrong-list{margin:8px 0 0;padding-left:18px;font-size:14px;line-height:1.7}
+.pair-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.pair-tip{font-size:14px;color:var(--muted);margin:6px 0 10px;line-height:1.6}
+.ptable{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:14px}
+.prow{display:grid;grid-template-columns:1.3fr 1.2fr 1fr;gap:10px;padding:8px 12px;border-top:1px solid var(--line)}
+.prow:first-child{border-top:none}
+.phead{background:var(--bg);font-size:12px;color:var(--muted);font-weight:500}
+.pans{font-weight:700;color:var(--ok)} .ptrap{color:var(--bad)}
+.pref{grid-template-columns:1fr;background:var(--accent-soft);color:var(--accent);font-size:13px}
+@media (max-width:720px){.prow{grid-template-columns:1fr;gap:2px}.phead{display:none}.ptrap::before{content:"함정: ";color:var(--muted)}}
 .reset-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
@@ -127,6 +144,7 @@ button.danger.solid{background:var(--bad);color:var(--surface);border-color:var(
   <main id="view"><div class="panel note">불러오는 중입니다.</div></main>
 </div>
 <script src="data/subjects.js"></script>
+<script src="data/pairs.js"></script>
 <script>
 const TRAPS = {
   "숫자": "기간·횟수·금액 (14일, 2회)",
@@ -135,7 +153,7 @@ const TRAPS = {
   "방법": "어떤 절차인가 (유치송달 ↔ 공시송달)",
   "효과": "있다 ↔ 없다, 할 수 있다 ↔ 하여야 한다"
 };
-const S = { subjects: window.TAX_SUBJECTS || [], data: window.TAX_DATA || {}, prog: {}, store: { mode: "none", db: null, uid: null }, train: null };
+const S = { subjects: window.TAX_SUBJECTS || [], data: window.TAX_DATA || {}, prog: {}, store: { mode: "none", db: null, uid: null }, train: null, ox: null, pending: null };
 const view = document.getElementById("view");
 
 function esc(s) { return String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
@@ -193,11 +211,27 @@ function queueRemote(id) {
     S.store.db.doc("data/users/" + S.store.uid + "/" + id).set(body)
   ).catch(e => { if (e && e.code === "invalid_argument") { S.store.db = null; setSave(S.store.mode === "acct" ? "local" : S.store.mode); } });
 }
+/* 간격 반복: 맞히면 1 → 3 → 7 → 14 → 30 → 60일 뒤 다시, 틀리면 내일 다시 */
+const LADDER = [1, 3, 7, 14, 30, 60];
+function today() { const n = new Date(); return Math.floor((n.getTime() - n.getTimezoneOffset() * 60000) / 86400000); }
+function isDue(st) { return !!st && st.last != null && (st.due == null || st.due <= today()); }
+function saveProg(id, p) { p.updated = Date.now(); lsSet("taxcloze:" + id, p); queueRemote(id); }
+function recordOX(id, cardId, ok) {
+  const p = loadProg(id);
+  const c = p.cards[cardId] || { r: 0, w: 0, last: null };
+  c.ox = c.ox || { r: 0, w: 0, last: null };
+  if (ok) c.ox.r++; else { c.ox.w++; c.last = 0; c.lv = 0; c.due = today() + 1; }
+  c.ox.last = ok ? 1 : 0;
+  p.cards[cardId] = c;
+  saveProg(id, p);
+}
 function record(id, cardId, ok) {
   const p = loadProg(id);
   const c = p.cards[cardId] || { r: 0, w: 0, last: null };
   if (ok) c.r++; else c.w++;
   c.last = ok ? 1 : 0;
+  if (ok) { c.lv = Math.min((c.lv || 0) + 1, LADDER.length); c.due = today() + LADDER[c.lv - 1]; }
+  else { c.lv = 0; c.due = today() + 1; }
   p.cards[cardId] = c;
   p.updated = Date.now();
   lsSet("taxcloze:" + id, p);
@@ -217,13 +251,17 @@ function loadData(s) {
 }
 function stats(id) {
   const d = S.data[id], p = loadProg(id);
-  const out = { total: 0, ok: 0, weak: 0, fresh: 0, bySec: {}, byTrap: {} };
+  const out = { total: 0, ok: 0, weak: 0, fresh: 0, due: 0, soon1: 0, soon7: 0, oxR: 0, oxW: 0, bySec: {}, byTrap: {} };
   if (!d) return out;
+  const td = today();
   d.cards.forEach(c => {
     const st = p.cards[c.id];
     const sec = out.bySec[c.s] || (out.bySec[c.s] = { total: 0, ok: 0, weak: 0 });
     out.total++; sec.total++;
-    if (!st) out.fresh++;
+    if (st && st.ox) { out.oxR += st.ox.r; out.oxW += st.ox.w; }
+    if (isDue(st)) out.due++;
+    else if (st && st.due != null) { if (st.due <= td + 1) out.soon1++; if (st.due <= td + 7) out.soon7++; }
+    if (!st || st.last == null) out.fresh++;
     else if (st.last === 1) { out.ok++; sec.ok++; }
     else { out.weak++; sec.weak++; }
     if (st && st.w) out.byTrap[c.t] = (out.byTrap[c.t] || 0) + st.w;
@@ -246,12 +284,21 @@ function renderHome() {
       (loaded ? '<div class="meter"><i style="width:' + pct + '%"></i></div><span class="meta">맞힌 카드 ' + st.ok + " / " + st.total + (st.weak ? " · 약한 카드 " + st.weak : "") + "</span>" : '<span class="meta">카드 불러오는 중</span>') + "</button>";
   });
   h += "</div>";
+  const dueSubs = S.subjects.filter(s => s.ready && S.data[s.id]).map(s => ({ s, st: stats(s.id) }));
+  const dueTotal = dueSubs.reduce((a, x) => a + x.st.due, 0), soon = dueSubs.reduce((a, x) => a + x.st.soon1, 0);
+  const studied = dueSubs.some(x => x.st.total - x.st.fresh);
+  let duePanel = "";
+  if (dueTotal) duePanel = '<div class="panel due-panel"><div><h3>오늘 복습할 카드 ' + dueTotal + '장</h3><p class="note" style="margin:2px 0 0">맞힌 카드는 1 · 3 · 7 · 14 · 30 · 60일 간격으로, 틀린 카드는 다음 날 다시 나옵니다.</p></div><div class="actions">' +
+    dueSubs.filter(x => x.st.due).map(x => '<button class="primary" data-due="' + x.s.id + '">' + esc(x.s.name) + " " + x.st.due + "장 →</button>").join("") + "</div></div>";
+  else if (studied) duePanel = '<div class="panel due-panel"><div><h3>오늘 복습할 카드가 없습니다</h3><p class="note" style="margin:2px 0 0">' + (soon ? "내일 복습할 카드 " + soon + "장이 기다리고 있습니다." : "새 카드를 풀면 복습 일정이 잡힙니다.") + "</p></div></div>";
+  h = h.replace('<div class="subjects">', duePanel + '<div class="subjects">');
   const anyRec = S.subjects.some(s => s.ready && Object.keys(loadProg(s.id).cards).length);
   h += '<div class="reset-row"><button class="danger" data-reset-all' + (anyRec ? "" : " disabled") + '>전체 기록 초기화</button><span class="note">모든 과목의 맞힘 · 틀림 기록과 약점 통계를 지웁니다.</span></div></div>';
   view.innerHTML = h;
   const ra = view.querySelector("[data-reset-all]");
   if (ra && !ra.disabled) armReset(ra, "모든 과목의 기록을 지울까요?", () => { resetProg(S.subjects.filter(s => s.ready).map(s => s.id)); renderHome(); });
   view.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { location.hash = b.dataset.go; }));
+  view.querySelectorAll("[data-due]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.due; S.pending = () => startTrain(id, "due"); location.hash = id; }));
   S.subjects.filter(s => s.ready && !S.data[s.id]).forEach(s => loadData(s).then(() => { loadProg(s.id); if (!location.hash || location.hash === "#home") renderHome(); }).catch(() => {}));
 }
 
@@ -288,7 +335,10 @@ function renderSubject(id) {
   let h = '<div style="display:flex;flex-direction:column;gap:16px">' +
     '<div><button class="back" data-home>← 과목 목록</button><h2 style="margin-top:6px">' + esc(s.name) + '</h2><p class="lede">' + esc(s.desc) + "</p></div>" +
     '<div class="tiles"><div class="tile"><b>' + st.total + '</b><span>전체 카드</span></div><div class="tile ok"><b>' + st.ok + '</b><span>맞힌 카드</span></div><div class="tile weak"><b>' + st.weak + '</b><span>약한 카드 (최근에 틀림)</span></div></div>' +
-    '<div class="actions"><button class="primary" data-mode="all">전체 훈련 (' + st.total + ')</button><button data-mode="weak"' + (st.weak ? "" : " disabled") + '>약한 카드만 (' + st.weak + ')</button><button data-mode="fresh"' + (st.fresh ? "" : " disabled") + ">안 본 카드만 (" + st.fresh + ")</button><button class=\"danger\" data-reset" + (st.total - st.fresh ? "" : " disabled") + ">이 과목 기록 초기화</button></div>" +
+    '<div class="actions"><button class="' + (st.due ? "primary" : "") + '" data-mode="due"' + (st.due ? "" : " disabled") + '>오늘 복습 (' + st.due + ')</button><button' + (st.due ? "" : ' class="primary"') + ' data-mode="all">전체 훈련 (' + st.total + ')</button><button data-mode="weak"' + (st.weak ? "" : " disabled") + '>약한 카드만 (' + st.weak + ')</button><button data-mode="fresh"' + (st.fresh ? "" : " disabled") + ">안 본 카드만 (" + st.fresh + ")</button></div>" +
+    '<p class="note" style="margin:-6px 2px 0">' + (st.due ? "오늘 복습할 카드 " + st.due + "장" : "오늘 복습할 카드 없음") + (st.soon1 ? " · 내일 " + st.soon1 + "장" : "") + (st.soon7 ? " · 7일 안에 " + st.soon7 + "장" : "") + "</p>" +
+    '<div class="actions"><button data-ox>실전 O/X (' + oxItems(id).length + '지문)</button><button data-pairs' + ((window.TAX_PAIRS || {})[id] ? "" : " disabled") + '>헷갈리는 짝 (' + (((window.TAX_PAIRS || {})[id] || []).length) + '묶음)</button><button class="danger" data-reset' + (Object.keys(loadProg(id).cards).length ? "" : " disabled") + '>이 과목 기록 초기화</button></div>' +
+    (st.oxR + st.oxW ? '<p class="note" style="margin:-6px 2px 0">실전 O/X 정답률 ' + Math.round(st.oxR / (st.oxR + st.oxW) * 100) + "% (" + st.oxR + " / " + (st.oxR + st.oxW) + ")</p>" : "") +
     '<div class="two"><div><div class="toc">' + tocHTML(id, null, true) + '</div><p class="note" style="margin:8px 2px 0">숫자 = 맞힌 카드 / 전체. 카드가 있는 절을 누르면 그 절만 훈련합니다.</p></div>' +
     '<div style="display:flex;flex-direction:column;gap:12px"><div class="panel"><h3>내가 자주 걸린 함정 자리</h3><div class="bars" style="margin-top:10px">' +
     (trapKeys.length ? trapKeys.map(k => '<div class="bar"><span>' + esc(k) + '</span><i style="width:' + Math.max(6, st.byTrap[k] / mx * 100) + '%"></i><span class="v">' + st.byTrap[k] + "</span></div>").join("") : '<p class="note" style="margin:0">아직 틀린 기록이 없습니다. 훈련을 하면 여기에 쌓입니다.</p>') +
@@ -298,6 +348,8 @@ function renderSubject(id) {
   view.innerHTML = h;
   view.querySelector("[data-home]").addEventListener("click", () => { location.hash = "home"; });
   view.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => startTrain(id, b.dataset.mode)));
+  view.querySelector("[data-ox]").addEventListener("click", () => renderOXSetup(id));
+  const pb = view.querySelector("[data-pairs]"); if (pb && !pb.disabled) pb.addEventListener("click", () => renderPairs(id));
   const rs = view.querySelector("[data-reset]");
   if (rs && !rs.disabled) armReset(rs, s.name + " 기록을 지울까요?", () => { resetProg([id]); renderSubject(id); });
   view.querySelectorAll("[data-sec]").forEach(el => {
@@ -312,10 +364,11 @@ function startTrain(id, mode, sec) {
   const d = S.data[id], p = loadProg(id);
   let idx = d.cards.map((_, i) => i);
   if (mode === "weak") idx = idx.filter(i => { const c = p.cards[d.cards[i].id]; return c && c.last === 0; });
-  if (mode === "fresh") idx = idx.filter(i => !p.cards[d.cards[i].id]);
+  if (mode === "fresh") idx = idx.filter(i => { const c = p.cards[d.cards[i].id]; return !c || c.last == null; });
+  if (mode === "due") idx = idx.filter(i => isDue(p.cards[d.cards[i].id]));
   if (mode === "sec") idx = idx.filter(i => d.cards[i].s === sec);
   if (!idx.length) return;
-  const label = { all: "전체 훈련", weak: "약한 카드만", fresh: "안 본 카드만", sec: "절별 훈련" }[mode];
+  const label = { all: "전체 훈련", weak: "약한 카드만", fresh: "안 본 카드만", sec: "절별 훈련", due: "오늘 복습" }[mode];
   S.train = newTrain(id, idx, label);
   renderTrain();
 }
@@ -478,6 +531,135 @@ function renderSummary() {
 }
 function exitTrain() { const id = S.train.id; S.train = null; renderSubject(id); window.scrollTo(0, 0); }
 
+/* ---------- 실전 O/X ---------- */
+function oxItems(id, filter) {
+  const d = S.data[id], p = loadProg(id), seen = new Set(), out = [];
+  if (!d) return out;
+  d.cards.forEach((c, ci) => {
+    const e = c.ex;
+    if (!e || (e.k !== "O" && e.k !== "X") || /계산/.test(e.src)) return;
+    const y = (e.src.match(/^(20\d\d)년/) || [])[1];
+    if (!y) return;
+    const text = (e.p + e.w + e.q).trim();
+    if (seen.has(text)) return;
+    seen.add(text);
+    if (filter === "wrong") { const st = p.cards[c.id]; if (!st || !st.ox || st.ox.last !== 0) return; }
+    else if (filter && filter !== y) return;
+    out.push({ ci, k: e.k, y });
+  });
+  return out;
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function renderOXSetup(id) {
+  const s = subj(id), all = oxItems(id), wrong = oxItems(id, "wrong");
+  const years = [...new Set(all.map(x => x.y))].sort();
+  view.innerHTML = '<div class="card" style="display:flex;flex-direction:column;gap:14px;max-width:720px">' +
+    '<div><button class="back" data-back>← ' + esc(s.name) + " 개요로</button><h2 style=\"margin-top:6px\">실전 O/X</h2>" +
+    '<p class="lede">시험지에 나온 지문 그대로 보고 맞는 지문(O)인지 비튼 지문(X)인지 고릅니다. 틀린 지문의 카드는 다음 날 빈칸 복습에도 나옵니다. 키보드 O · X 키로도 고를 수 있습니다.</p></div>' +
+    '<div class="actions"><button class="primary" data-oxgo="">전체 섞어서 (' + all.length + ")</button>" +
+    (wrong.length ? '<button data-oxgo="wrong">지난번 틀린 지문만 (' + wrong.length + ")</button>" : "") + "</div>" +
+    '<div><h3>연도별</h3><div class="actions" style="margin-top:8px">' + years.map(y => '<button data-oxgo="' + y + '">' + y + "년 (" + all.filter(x => x.y === y).length + ")</button>").join("") + "</div></div></div>";
+  view.querySelector("[data-back]").addEventListener("click", () => renderSubject(id));
+  view.querySelectorAll("[data-oxgo]").forEach(b => b.addEventListener("click", () => startOX(id, b.dataset.oxgo)));
+  window.scrollTo(0, 0);
+}
+function startOX(id, filter, items) {
+  const list = items || shuffle(oxItems(id, filter));
+  if (!list.length) return;
+  const label = filter === "wrong" ? "틀린 지문" : filter ? filter + "년" : "전체";
+  S.train = null;
+  S.ox = { id, filter, label, list, res: list.map(() => null), pos: 0 };
+  renderOX();
+}
+function oxScore(O) { const done = O.res.filter(Boolean); return { done: done.length, ok: done.filter(r => r.ok).length }; }
+function renderOX() {
+  const O = S.ox, s = subj(O.id), d = S.data[O.id];
+  if (O.pos >= O.list.length) { renderOXSummary(); return; }
+  const it = O.list[O.pos], c = d.cards[it.ci], e = c.ex, r = O.res[O.pos], sc = oxScore(O);
+  let body = '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span class="tag">' + esc(c.sub) + "</span>" + (r ? '<span class="note">' + esc(e.src) + "</span>" : "") + "</div>";
+  if (!r) {
+    body += '<div class="sent ox-text">' + esc(e.p + e.w + e.q) + "</div>" +
+      '<div class="ox-row"><button class="ox-btn" data-pick="O" aria-label="맞는 지문 O">O<span>맞는 지문</span></button><button class="ox-btn" data-pick="X" aria-label="비튼 지문 X">X<span>비튼 지문</span></button></div>';
+  } else {
+    const cls = e.k === "O" ? "success" : "danger";
+    body += '<div class="sent ox-text">' + esc(e.p) + '<span class="k k-' + cls + '">' + esc(e.w) + "</span>" + esc(e.q) + "</div>" +
+      '<div class="info"><div><span class="verdict v-' + (r.ok ? "success" : "danger") + '">' + r.pick + " 선택 → " + (r.ok ? "정답" : "오답") + " · 이 지문은 " + (e.k === "O" ? "맞는 지문(O)" : "비튼 지문(X)") + "</span></div>" +
+      (e.k === "X" ? '<div style="margin-top:6px"><span class="lab">고칠 곳</span><b style="color:var(--bad)">' + esc(e.w) + '</b> → <b style="color:var(--ok)">' + esc(c.b) + "</b>" + (e.note ? "<br>" + esc(e.note) : "") + "</div>" : "") +
+      '<div><span class="lab">이유</span>' + esc(c.why) + "</div>" +
+      '<div><span class="lab">빈칸 카드</span>' + esc(c.a) + "<b>" + esc(c.b) + "</b>" + esc(c.z) + "</div></div>";
+  }
+  const last = O.pos >= O.list.length - 1;
+  body += '<div class="nav"><button data-prev' + (O.pos > 0 ? "" : " disabled") + '>← 이전 지문</button><button data-next>' + (r ? (last ? "결과 보기 →" : "다음 지문 →") : (last ? "건너뛰고 결과 보기 →" : "건너뛰기 →")) + "</button></div>";
+  view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px;max-width:820px">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button class="back" data-exit>← ' + esc(s.name) + ' 개요로</button><span class="note">실전 O/X · ' + esc(O.label) + " · " + (O.pos + 1) + "번째 / " + O.list.length + "</span></div>" +
+    '<div class="progress"><div class="meter"><i style="width:' + (sc.done / O.list.length * 100) + '%"></i></div><span>정답 ' + sc.ok + " / 푼 " + sc.done + "</span></div>" +
+    '<div class="card">' + body + "</div></div>";
+  view.querySelector("[data-exit]").addEventListener("click", exitOX);
+  view.querySelector("[data-prev]").addEventListener("click", () => { if (O.pos > 0) { O.pos--; renderOX(); } });
+  view.querySelector("[data-next]").addEventListener("click", () => { O.pos++; renderOX(); window.scrollTo(0, 0); });
+  view.querySelectorAll("[data-pick]").forEach(b => b.addEventListener("click", () => oxPick(b.dataset.pick)));
+  const f = view.querySelector(r ? "[data-next]" : "[data-pick]"); if (f) f.focus();
+}
+function oxPick(pick) {
+  const O = S.ox; if (!O || O.res[O.pos]) return;
+  const it = O.list[O.pos], c = S.data[O.id].cards[it.ci], ok = pick === it.k;
+  O.res[O.pos] = { pick, ok };
+  recordOX(O.id, c.id, ok);
+  renderOX();
+}
+function renderOXSummary() {
+  const O = S.ox, s = subj(O.id), d = S.data[O.id], sc = oxScore(O);
+  const wrongItems = O.list.filter((_, i) => O.res[i] && !O.res[i].ok);
+  const skipped = O.list.filter((_, i) => !O.res[i]);
+  view.innerHTML = '<div class="card" style="display:flex;flex-direction:column;gap:12px;max-width:720px">' +
+    "<h2>실전 O/X " + esc(O.label) + " · " + sc.ok + " / " + sc.done + "</h2>" +
+    '<p class="note" style="margin:0">정답률 ' + (sc.done ? Math.round(sc.ok / sc.done * 100) : 0) + "%" + (skipped.length ? " · 건너뛴 지문 " + skipped.length + "개" : "") + "</p>" +
+    (wrongItems.length ? '<div><h3>틀린 지문</h3><ul class="wrong-list">' + wrongItems.map(it => { const c = d.cards[it.ci]; return "<li><span class=\"note\">" + esc(c.ex.src) + "</span> " + esc(c.sub) + " · " + (c.ex.k === "X" ? esc(c.ex.w) + " → <b>" + esc(c.b) + "</b>" : "맞는 지문이었음") + "</li>"; }).join("") + "</ul></div>" : (sc.done ? '<p style="margin:0;color:var(--ok)">모두 맞혔습니다.</p>' : "")) +
+    '<div class="actions">' + (wrongItems.length ? '<button class="primary" data-w>틀린 지문만 다시 (' + wrongItems.length + ")</button>" : "") +
+    (skipped.length ? '<button data-sk>건너뛴 지문 풀기 (' + skipped.length + ")</button>" : "") +
+    '<button data-again>다시 섞어서</button><button data-prev>← 이전 지문</button><button data-exit>' + esc(s.name) + " 개요로</button></div></div>";
+  view.querySelector("[data-exit]").addEventListener("click", exitOX);
+  view.querySelector("[data-prev]").addEventListener("click", () => { O.pos = O.list.length - 1; renderOX(); });
+  view.querySelector("[data-again]").addEventListener("click", () => startOX(O.id, O.filter));
+  const w = view.querySelector("[data-w]"); if (w) w.addEventListener("click", () => startOX(O.id, "wrong", shuffle(wrongItems.slice())));
+  const k = view.querySelector("[data-sk]"); if (k) k.addEventListener("click", () => { O.pos = O.list.indexOf(skipped[0]); renderOX(); });
+  window.scrollTo(0, 0);
+}
+function exitOX() { const id = S.ox.id; S.ox = null; renderSubject(id); window.scrollTo(0, 0); }
+document.addEventListener("keydown", e => {
+  if (!S.ox || e.target.tagName === "INPUT" || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === "o" || k === "ㅐ") { e.preventDefault(); oxPick("O"); }
+  else if (k === "x" || k === "ㅌ") { e.preventDefault(); oxPick("X"); }
+});
+
+/* ---------- 헷갈리는 짝 ---------- */
+function renderPairs(id) {
+  const s = subj(id), d = S.data[id], groups = (window.TAX_PAIRS || {})[id] || [];
+  const byId = new Map(d.cards.map((c, i) => [c.id, i]));
+  const allIdx = [...new Set(groups.flatMap(g => g.cards.map(x => byId.get(x)).filter(x => x !== undefined)))];
+  view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px">' +
+    '<div><button class="back" data-back>← ' + esc(s.name) + ' 개요로</button><h2 style="margin-top:6px">헷갈리는 짝</h2>' +
+    '<p class="lede">출제자가 서로 바꿔 내는 숫자 · 개념을 묶었습니다. 표로 비교한 뒤 연달아 풀어 보세요.</p></div>' +
+    '<div class="actions"><button class="primary" data-pall>모든 묶음 연달아 풀기 (' + allIdx.length + "장)</button></div>" +
+    groups.map((g, gi) => {
+      const rows = g.cards.map(x => d.cards[byId.get(x)]).filter(Boolean);
+      return '<div class="panel pair"><div class="pair-head"><h3>' + esc(g.title) + '</h3><button data-pg="' + gi + '">연달아 풀기 (' + rows.length + "장)</button></div>" +
+        '<p class="pair-tip">' + esc(g.tip) + "</p>" +
+        '<div class="ptable"><div class="prow phead"><span>항목</span><span>정답</span><span>자주 나오는 함정</span></div>' +
+        rows.map(c => '<div class="prow"><span>' + esc(c.sub) + '</span><span class="pans">' + esc(c.b) + '</span><span class="ptrap">' + esc(c.trap) + "</span></div>").join("") +
+        (g.ref || []).map(r => '<div class="prow pref"><span>다른 과목 비교 · ' + esc(r) + "</span></div>").join("") + "</div></div>";
+    }).join("") + "</div>";
+  view.querySelector("[data-back]").addEventListener("click", () => renderSubject(id));
+  view.querySelector("[data-pall]").addEventListener("click", () => { S.train = newTrain(id, allIdx, "헷갈리는 짝 전체"); renderTrain(); });
+  view.querySelectorAll("[data-pg]").forEach(b => b.addEventListener("click", () => {
+    const g = groups[+b.dataset.pg];
+    S.train = newTrain(id, g.cards.map(x => byId.get(x)).filter(x => x !== undefined), "짝: " + g.title);
+    renderTrain(); window.scrollTo(0, 0);
+  }));
+  window.scrollTo(0, 0);
+}
+
 /* ---------- 기록 초기화 ---------- */
 function resetProg(ids) {
   ids.forEach(id => {
@@ -500,11 +682,14 @@ function armReset(btn, msg, onYes) {
 
 /* ---------- 라우팅 ---------- */
 function route() {
-  if (S.train) return;
+  if (S.train || S.ox) return;
   const h = (location.hash || "").replace("#", "");
   if (!h || h === "home") renderHome(); else renderSubject(h);
 }
-window.addEventListener("hashchange", () => { S.train = null; route(); window.scrollTo(0, 0); });
+window.addEventListener("hashchange", () => {
+  S.train = null; S.ox = null; route(); window.scrollTo(0, 0);
+  if (S.pending) { const f = S.pending; S.pending = null; f(); }
+});
 route();
 initStore();
 </script>
