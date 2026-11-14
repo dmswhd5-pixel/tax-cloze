@@ -65,7 +65,7 @@ a{color:var(--accent)}
 .tile.weak b{color:var(--bad)} .tile.ok b{color:var(--ok)}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 .two{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start}
-@media (max-width:720px){.two{grid-template-columns:1fr}.tiles{grid-template-columns:1fr 1fr 1fr}.toc{position:static}.toc.train .ch,.toc.train .sec:not(.on){display:none}.nav button{flex:1}}
+@media (max-width:720px){.two{grid-template-columns:1fr}.tiles{grid-template-columns:1fr 1fr 1fr}.toc{position:static}.toc.train .ch{display:none}.toc.train .sec{display:none}.toc.train.open .ch,.toc.train.open .sec,.toc.train .sec.on{display:flex}.toc.train.open .ch{display:block}.nav button{flex:1}.toc.train .toc-toggle{display:block}.two .toc-hint{display:none}}
 .toc{font-size:13px;line-height:1.45;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;position:sticky;top:12px}
 .toc .ch{font-weight:700;color:var(--ink);margin-top:9px}
 .toc .ch:first-child{margin-top:0}
@@ -107,6 +107,8 @@ button.danger{color:var(--bad);border-color:var(--line)}
 button.danger:hover:not(:disabled){border-color:var(--bad)}
 button.danger.solid{background:var(--bad);color:var(--surface);border-color:var(--bad);font-weight:500}
 .confirm{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--bad)}
+.toc-hint{margin:8px 2px 0}
+.toc-toggle{display:none;width:100%;margin-bottom:8px;font-size:13px;padding:6px 10px}
 .reset-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
@@ -314,8 +316,11 @@ function startTrain(id, mode, sec) {
   if (mode === "sec") idx = idx.filter(i => d.cards[i].s === sec);
   if (!idx.length) return;
   const label = { all: "전체 훈련", weak: "약한 카드만", fresh: "안 본 카드만", sec: "절별 훈련" }[mode];
-  S.train = { id, q: idx, n: idx.length, done: 0, miss: {}, label, orig: idx.slice(), hist: [], view: null, cur: null };
+  S.train = newTrain(id, idx, label);
   renderTrain();
+}
+function newTrain(id, idx, label) {
+  return { id, list: idx.slice(), st: idx.map(() => null), pos: 0, n: idx.length, ok: {}, miss: {}, label, orig: idx.slice(), cur: null };
 }
 function judge(c, v) {
   const n = norm(v);
@@ -348,65 +353,84 @@ function resultHTML(c, v, j) {
     '<div style="margin-top:6px"><span class="lab">이유</span>' + esc(c.why) + "</div>" +
     '<div><span class="lab">비틀면</span>' + esc(c.trap) + "</div></div>" + exHTML(c);
 }
-function navHTML(prevOn, nextOn, nextLabel) {
-  return '<div class="nav"><button data-prev' + (prevOn ? "" : " disabled") + '>← 이전 문제</button>' +
-    '<button data-next' + (nextOn ? "" : " disabled") + ">" + (nextLabel || "다음 문제 →") + "</button></div>";
+function doneCount(T) { return Object.keys(T.ok).length; }
+function skippedPos(T) {
+  // 아직 한 번도 채점하지 않은 카드의 위치 (같은 카드가 뒤에서 채점됐으면 제외)
+  const graded = new Set();
+  T.list.forEach((ci, k) => { if (T.st[k]) graded.add(ci); });
+  const seen = new Set(), out = [];
+  T.list.forEach((ci, k) => { if (!T.st[k] && !graded.has(ci) && !seen.has(ci)) { seen.add(ci); out.push(k); } });
+  return out;
 }
 function trainHead(T, s, c) {
-  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button class="back" data-exit>← ' + esc(s.name) + " 개요로</button><span class=\"note\">" + esc(T.label) + "</span></div>" +
-    '<div class="progress"><div class="meter"><i style="width:' + (T.done / T.n * 100) + '%"></i></div><span>' + T.done + " / " + T.n + "</span></div>" +
-    '<div class="two"><div class="toc train" aria-label="현재 위치">' + tocHTML(T.id, c, false) + "</div>";
+  return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button class="back" data-exit>← ' + esc(s.name) + " 개요로</button><span class=\"note\">" + esc(T.label) + " · " + (T.pos + 1) + "번째 / " + T.list.length + "</span></div>" +
+    '<div class="progress"><div class="meter"><i style="width:' + (doneCount(T) / T.n * 100) + '%"></i></div><span>맞힘 ' + doneCount(T) + " / " + T.n + "</span></div>" +
+    '<div class="two"><div><div class="toc train" aria-label="목차 · 누르면 그 절로 이동"><button class="toc-toggle" data-toc aria-expanded="false">목차 펼치기 ▾</button>' + tocHTML(T.id, c, true) + '</div><p class="note toc-hint">절 이름을 누르면 그 절 문제로 이동합니다.</p></div>';
 }
-function bindNav() {
-  const pv = view.querySelector("[data-prev]"), nx = view.querySelector("[data-next]");
+function navHTML(T) {
+  const last = T.pos >= T.list.length - 1;
+  const label = T.cur ? "다음 문제 →" : (T.st[T.pos] ? (last ? "결과 보기 →" : "다음 문제 →") : (last ? "건너뛰고 결과 보기 →" : "건너뛰기 →"));
+  return '<div class="nav"><button data-prev' + (T.pos > 0 ? "" : " disabled") + '>← 이전 문제</button><button data-next>' + label + "</button></div>";
+}
+function bindTrain() {
+  const pv = view.querySelector("[data-prev]"), nx = view.querySelector("[data-next]"), ex = view.querySelector("[data-exit]");
   if (pv) pv.addEventListener("click", goPrev);
   if (nx) nx.addEventListener("click", goNext);
-  const ex = view.querySelector("[data-exit]");
   if (ex) ex.addEventListener("click", exitTrain);
+  const tg = view.querySelector("[data-toc]");
+  if (tg) tg.addEventListener("click", () => { const box = tg.parentElement, open = box.classList.toggle("open"); tg.textContent = open ? "목차 접기 ▴" : "목차 펼치기 ▾"; tg.setAttribute("aria-expanded", open); });
+  view.querySelectorAll(".toc [data-sec]").forEach(el => {
+    const go = () => jumpSec(el.dataset.sec);
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
 }
 function renderTrain() {
   const T = S.train, d = S.data[T.id], s = subj(T.id);
-  if (T.view !== null) { renderReview(); return; }
-  if (!T.q.length) { renderSummary(); return; }
-  const c = d.cards[T.q[0]];
+  if (T.pos >= T.list.length) { renderSummary(); return; }
+  const c = d.cards[T.list[T.pos]], h = T.st[T.pos];
   T.cur = null;
+  let body;
+  if (h) {
+    body = '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span class="tag">함정 자리: ' + esc(c.t) + '</span><span class="note">이미 푼 문제 · ' + (h.ok ? "맞음으로 기록" : "다시 나오기로 기록") + "</span></div>" +
+      '<div class="sent">' + esc(c.a) + '<span class="blank">' + esc(c.b) + "</span>" + esc(c.z) + "</div>" + resultHTML(c, h.v, h.j);
+  } else {
+    body = '<span class="tag">함정 자리: ' + esc(c.t) + "</span>" +
+      '<div class="sent">' + esc(c.a) + '<span class="blank" id="bl">?</span>' + esc(c.z) + "</div>" +
+      '<form class="answer" id="f"><label for="in" class="note" style="width:100%;margin-bottom:-2px">빈칸에 들어갈 말 · 뜻이 같으면 정답</label><input id="in" type="text" autocomplete="off"><button class="primary" id="rv" type="submit">확인</button></form>' +
+      '<div class="err" id="err" role="alert"></div><div id="res"></div>';
+  }
   view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px">' + trainHead(T, s, c) +
-    '<div class="card"><span class="tag">함정 자리: ' + esc(c.t) + "</span>" +
-    '<div class="sent">' + esc(c.a) + '<span class="blank" id="bl">?</span>' + esc(c.z) + "</div>" +
-    '<form class="answer" id="f"><label for="in" class="note" style="width:100%;margin-bottom:-2px">빈칸에 들어갈 말 · 뜻이 같으면 정답</label><input id="in" type="text" autocomplete="off"><button class="primary" id="rv" type="submit">확인</button></form>' +
-    '<div class="err" id="err" role="alert"></div><div id="res"></div>' +
-    navHTML(T.hist.length > 0, T.q.length > 1, "건너뛰기 →") + "</div></div></div>";
-  bindNav();
+    '<div class="card">' + body + navHTML(T) + "</div></div></div>";
+  bindTrain();
   const inp = document.getElementById("in");
-  inp.focus();
-  inp.addEventListener("input", () => { document.getElementById("err").textContent = ""; });
-  document.getElementById("f").addEventListener("submit", e => { e.preventDefault(); reveal(); });
+  if (inp) {
+    inp.focus();
+    inp.addEventListener("input", () => { document.getElementById("err").textContent = ""; });
+    document.getElementById("f").addEventListener("submit", e => { e.preventDefault(); reveal(); });
+  } else { const nx = view.querySelector("[data-next]"); if (nx) nx.focus(); }
 }
-function renderReview() {
-  const T = S.train, d = S.data[T.id], s = subj(T.id), h = T.hist[T.view], c = d.cards[h.i];
-  const atEnd = T.view === T.hist.length - 1;
-  view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px">' + trainHead(T, s, c) +
-    '<div class="card"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span class="tag">함정 자리: ' + esc(c.t) + '</span><span class="note">지난 문제 ' + (T.view + 1) + " / " + T.hist.length + " · " + (h.ok ? "맞음으로 기록" : "다시 나오기로 기록") + "</span></div>" +
-    '<div class="sent">' + esc(c.a) + '<span class="blank">' + esc(c.b) + "</span>" + esc(c.z) + "</div>" +
-    resultHTML(c, h.v, h.j) +
-    navHTML(T.view > 0, true, atEnd ? (T.q.length ? "지금 문제로 →" : "결과 보기 →") : "다음 문제 →") + "</div></div></div>";
-  bindNav();
-  const nx = view.querySelector("[data-next]"); if (nx) nx.focus();
-}
-function goPrev() {
-  const T = S.train;
-  if (!T.hist.length) return;
-  T.view = T.view === null ? T.hist.length - 1 : Math.max(0, T.view - 1);
-  renderTrain(); window.scrollTo(0, 0);
-}
+function move(pos) { S.train.pos = pos; renderTrain(); window.scrollTo(0, 0); }
+function goPrev() { const T = S.train; if (T.pos > 0) move(T.pos - 1); }
 function goNext() {
   const T = S.train;
-  if (T.view !== null) { T.view = T.view < T.hist.length - 1 ? T.view + 1 : null; renderTrain(); window.scrollTo(0, 0); return; }
   if (T.cur) { grade(T.cur.good); return; }
-  if (T.q.length > 1) { T.q.push(T.q.shift()); renderTrain(); window.scrollTo(0, 0); }
+  move(T.pos + 1);
+}
+function jumpSec(sec) {
+  const T = S.train, d = S.data[T.id];
+  let k = T.list.findIndex((ci, i) => d.cards[ci].s === sec && !T.st[i] && !T.ok[ci]);
+  if (k < 0) k = T.list.findIndex(ci => d.cards[ci].s === sec);
+  if (k < 0) {
+    const add = d.cards.map((c, i) => i).filter(i => d.cards[i].s === sec);
+    if (!add.length) return;
+    k = T.list.length;
+    add.forEach(i => { T.list.push(i); T.st.push(null); if (!T.orig.includes(i)) { T.orig.push(i); T.n++; } });
+  }
+  move(k);
 }
 function reveal() {
-  const T = S.train, c = S.data[T.id].cards[T.q[0]];
+  const T = S.train, c = S.data[T.id].cards[T.list[T.pos]];
   const inp = document.getElementById("in");
   if (inp.disabled) return;
   const v = inp.value.trim();
@@ -419,37 +443,38 @@ function reveal() {
     '<div class="next">' + (good
       ? '<button class="primary" data-g="1">맞음 · 다음</button><button data-g="0">사실 헷갈렸다 · 다시 나오기</button>'
       : '<button class="primary" data-g="0">몰랐다 · 다시 나오기</button><button data-g="1">뜻은 같았다 · 맞음 처리</button>') + "</div>";
-  const nx = view.querySelector("[data-next]");
-  if (nx) { nx.disabled = false; nx.textContent = "다음 문제 →"; }
+  const nx = view.querySelector("[data-next]"); if (nx) nx.textContent = "다음 문제 →";
   const first = document.querySelector("[data-g]");
   document.querySelectorAll("[data-g]").forEach(b => b.addEventListener("click", () => grade(b.dataset.g === "1")));
   if (first) first.focus();
 }
 function grade(ok) {
   const T = S.train, d = S.data[T.id];
-  const i = T.q.shift(), c = d.cards[i];
+  const ci = T.list[T.pos], c = d.cards[ci];
   record(T.id, c.id, ok);
-  T.hist.push({ i, v: T.cur ? T.cur.v : "", j: T.cur ? T.cur.j : "unk", ok });
+  T.st[T.pos] = { v: T.cur ? T.cur.v : "", j: T.cur ? T.cur.j : "unk", ok };
   T.cur = null;
-  if (ok) T.done++;
-  else { T.q.push(i); T.miss[c.t] = (T.miss[c.t] || 0) + 1; }
-  renderTrain();
+  if (ok) T.ok[ci] = 1;
+  else { delete T.ok[ci]; T.list.push(ci); T.st.push(null); T.miss[c.t] = (T.miss[c.t] || 0) + 1; }
+  move(T.pos + 1);
 }
 function renderSummary() {
   const T = S.train, s = subj(T.id);
   const keys = Object.keys(T.miss).sort((a, b) => T.miss[b] - T.miss[a]);
   const mx = keys.length ? T.miss[keys[0]] : 1;
+  const sk = skippedPos(T);
   view.innerHTML = '<div class="card" style="display:flex;flex-direction:column;gap:12px;max-width:640px">' +
-    "<h2>" + esc(T.label) + " 완료 · " + T.n + "장</h2>" +
+    "<h2>" + esc(T.label) + (sk.length ? " · 건너뛴 문제 " + sk.length + "개 남음" : " 완료 · " + T.n + "장") + "</h2>" +
+    '<p class="note" style="margin:0">맞힌 카드 ' + doneCount(T) + " / " + T.n + "</p>" +
     (keys.length
       ? '<div><h3>이번에 걸린 함정 자리</h3><div class="bars" style="margin-top:8px">' + keys.map(k => '<div class="bar"><span>' + esc(k) + '</span><i style="width:' + Math.max(6, T.miss[k] / mx * 100) + '%"></i><span class="v">' + T.miss[k] + "</span></div>").join("") + "</div></div>"
-      : '<p style="margin:0;color:var(--ok)">한 번도 틀리지 않았습니다.</p>') +
-    '<div class="actions"><button class="primary" data-exit>' + esc(s.name) + " 개요로</button><button data-again>같은 카드 다시</button>" + (T.hist.length ? "<button data-prev>← 푼 문제 다시 보기</button>" : "") + "</div></div>";
-  bindNav();
-  view.querySelector("[data-again]").addEventListener("click", () => {
-    S.train = { id: T.id, q: T.orig.slice(), n: T.orig.length, done: 0, miss: {}, label: T.label, orig: T.orig, hist: [], view: null, cur: null };
-    renderTrain();
-  });
+      : (doneCount(T) ? '<p style="margin:0;color:var(--ok)">한 번도 틀리지 않았습니다.</p>' : "")) +
+    '<div class="actions">' + (sk.length ? '<button class="primary" data-skipped>건너뛴 문제 풀기 (' + sk.length + ")</button>" : "") +
+    '<button' + (sk.length ? "" : ' class="primary"') + ' data-exit>' + esc(s.name) + " 개요로</button><button data-again>같은 카드 처음부터</button>" + (T.list.length ? "<button data-prev>← 이전 문제</button>" : "") + "</div></div>";
+  bindTrain();
+  const sb = view.querySelector("[data-skipped]");
+  if (sb) sb.addEventListener("click", () => move(sk[0]));
+  view.querySelector("[data-again]").addEventListener("click", () => { S.train = newTrain(T.id, T.orig, T.label); renderTrain(); });
 }
 function exitTrain() { const id = S.train.id; S.train = null; renderSubject(id); window.scrollTo(0, 0); }
 
