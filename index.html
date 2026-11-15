@@ -12,6 +12,7 @@
 :root{
   --bg:#F4F5F8; --surface:#FFFFFF; --ink:#1A2130; --muted:#5A6375; --faint:#8A92A3; --line:#DDE1E8;
   --accent:#27466F; --accent-ink:#FFFFFF; --accent-soft:#E5EBF4;
+  --f2:#1F66B3; --f2-soft:#E3EEFA; --f3:#7A3DB8; --f3-soft:#F0E7FA; --f4:#C2410C; --f4-soft:#FCEADF;
   --ok:#1E7448; --ok-soft:#E2F1E8; --bad:#AF3329; --bad-soft:#F8E5E3; --warn:#8C5C08; --warn-soft:#FAEFD8;
   --f-display:"Noto Serif KR","Nanum Myeongjo",serif;
   --f-body:"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
@@ -20,11 +21,13 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#12151C; --surface:#1A1F29; --ink:#E6E9EF; --muted:#A3ABBA; --faint:#7A8394; --line:#2C3340;
   --accent:#8FB0DE; --accent-ink:#0F1622; --accent-soft:#223149;
+  --f2:#7DB4F0; --f2-soft:#17283D; --f3:#C29BF0; --f3-soft:#2A1D3D; --f4:#F59A6B; --f4-soft:#3A2116;
   --ok:#6CC596; --ok-soft:#173326; --bad:#F08A7F; --bad-soft:#3A1E1B; --warn:#E3B45C; --warn-soft:#352812;
   color-scheme:dark;}}
 :root[data-theme="dark"]{
   --bg:#12151C; --surface:#1A1F29; --ink:#E6E9EF; --muted:#A3ABBA; --faint:#7A8394; --line:#2C3340;
   --accent:#8FB0DE; --accent-ink:#0F1622; --accent-soft:#223149;
+  --f2:#7DB4F0; --f2-soft:#17283D; --f3:#C29BF0; --f3-soft:#2A1D3D; --f4:#F59A6B; --f4-soft:#3A2116;
   --ok:#6CC596; --ok-soft:#173326; --bad:#F08A7F; --bad-soft:#3A1E1B; --warn:#E3B45C; --warn-soft:#352812;
   color-scheme:dark;}
 *{box-sizing:border-box}
@@ -142,6 +145,19 @@ button.danger.solid{background:var(--bad);color:var(--surface);border-color:var(
 .hd{font-weight:500}
 .bar.wide{grid-template-columns:110px 1fr 40px}
 @media (max-width:720px){.drow{grid-template-columns:1fr auto}.drow .chip{grid-column:1/-1}.hrow{grid-template-columns:1fr auto}.hrow .note{grid-column:1/-1;grid-row:2}}
+.fq{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap;vertical-align:1px}
+.fq.f2{background:var(--f2-soft);color:var(--f2)} .fq.f3{background:var(--f3-soft);color:var(--f3)} .fq.f4{background:var(--f4-soft);color:var(--f4)}
+.card.fqcard,.fq-item.fqcard{border-left-width:5px} .card.fqcard.f2,.fq-item.fqcard.f2{border-left-color:var(--f2)} .card.fqcard.f3,.fq-item.fqcard.f3{border-left-color:var(--f3)} .card.fqcard.f4,.fq-item.fqcard.f4{border-left-color:var(--f4)}
+.fq-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.fq-legend{display:flex;gap:6px;flex-wrap:wrap}
+.fq-panel{border-color:var(--f3)}
+button.fq-btn{color:var(--f3);border-color:var(--f3)}
+button.tab.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.fq-item{border-width:1px;border-style:solid;border-color:var(--line);border-radius:10px;padding:10px 14px;margin-top:10px;background:var(--surface)}
+.fq-item .fq-row{margin-bottom:4px}
+.fq-sent{font-size:15px;line-height:1.75}
+.fq-sent b{color:var(--accent)}
+.prow .fq{margin-left:4px}
 .reset-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
@@ -175,6 +191,23 @@ const view = document.getElementById("view");
 function esc(s) { return String(s).replace(/[&<>"]/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m])); }
 function norm(s) { return s.replace(/[\s.,·]/g, "").toLowerCase(); }
 function subj(id) { return S.subjects.find(s => s.id === id); }
+/* ---------- 기출 횟수: 같은 내용이 서로 다른 시험(연도·문항)에 나온 횟수 ---------- */
+const FQ = new WeakMap();
+function freqOf(c) {
+  if (FQ.has(c)) return FQ.get(c);
+  const set = new Set(c.also || []), s = (c.ex ? c.ex.src + " " + (c.ex.note || "") : "");
+  let m; const re = /(20\d\d)년 (\d+)번/g;
+  while ((m = re.exec(s))) set.add(m[1] + "-" + m[2]);
+  const keys = [...set].sort();
+  const out = { n: keys.length, keys, years: [...new Set(keys.map(k => k.split("-")[0]))] };
+  FQ.set(c, out); return out;
+}
+function fqLevel(n) { return n >= 4 ? 4 : n >= 2 ? n : 0; }
+function fqBadge(c, short) {
+  const f = freqOf(c), lv = fqLevel(f.n); if (!lv) return "";
+  return '<span class="fq f' + lv + '" title="' + esc(f.keys.map(k => k.replace("-", "년 ") + "번").join(", ")) + '">기출 ' + f.n + "회" + (short ? "" : " · " + f.keys.map(k => k.replace("-", "년 ") + "번").join(" · ")) + "</span>";
+}
+function fqClass(c) { const lv = fqLevel(freqOf(c).n); return lv ? " fqcard f" + lv : ""; }
 
 /* ---------- 기록 저장 ---------- */
 function lsGet(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } }
@@ -310,12 +343,14 @@ function renderHome() {
   else if (studied) duePanel = '<div class="panel due-panel"><div><h3>오늘 복습할 카드가 없습니다</h3><p class="note" style="margin:2px 0 0">' + (soon ? "내일 복습할 카드 " + soon + "장이 기다리고 있습니다." : "새 카드를 풀면 복습 일정이 잡힙니다.") + "</p></div></div>";
   h = h.replace('<div class="subjects">', duePanel + '<div class="subjects">');
   h += dailyPanelHTML();
+  h += freqPanelHTML();
   const anyRec = S.subjects.some(s => s.ready && Object.keys(loadProg(s.id).cards).length);
   h += '<div class="reset-row"><button class="danger" data-reset-all' + (anyRec ? "" : " disabled") + '>전체 기록 초기화</button><span class="note">모든 과목의 맞힘 · 틀림 기록과 약점 통계를 지웁니다. 하루치 학습 기록은 남습니다.</span></div></div>';
   view.innerHTML = h;
   const ra = view.querySelector("[data-reset-all]");
   if (ra && !ra.disabled) armReset(ra, "모든 과목의 기록을 지울까요?", () => { resetProg(S.subjects.filter(s => s.ready).map(s => s.id)); renderHome(); });
   bindDailyPanel();
+  view.querySelectorAll("[data-fq]").forEach(b => b.addEventListener("click", () => renderFreq(b.dataset.fq)));
   view.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => { location.hash = b.dataset.go; }));
   view.querySelectorAll("[data-due]").forEach(b => b.addEventListener("click", () => { const id = b.dataset.due; S.pending = () => startTrain(id, "due"); location.hash = id; }));
   S.subjects.filter(s => s.ready && !S.data[s.id]).forEach(s => loadData(s).then(() => { loadProg(s.id); if (!location.hash || location.hash === "#home") renderHome(); }).catch(() => {}));
@@ -354,7 +389,7 @@ function renderSubject(id) {
   let h = '<div style="display:flex;flex-direction:column;gap:16px">' +
     '<div><button class="back" data-home>← 과목 목록</button><h2 style="margin-top:6px">' + esc(s.name) + '</h2><p class="lede">' + esc(s.desc) + "</p></div>" +
     '<div class="tiles"><div class="tile"><b>' + st.total + '</b><span>전체 카드</span></div><div class="tile ok"><b>' + st.ok + '</b><span>맞힌 카드</span></div><div class="tile weak"><b>' + st.weak + '</b><span>약한 카드 (최근에 틀림)</span></div></div>' +
-    '<div class="actions"><button class="' + (st.due ? "primary" : "") + '" data-mode="due"' + (st.due ? "" : " disabled") + '>오늘 복습 (' + st.due + ')</button><button' + (st.due ? "" : ' class="primary"') + ' data-mode="all">전체 훈련 (' + st.total + ')</button><button data-mode="weak"' + (st.weak ? "" : " disabled") + '>약한 카드만 (' + st.weak + ')</button><button data-mode="fresh"' + (st.fresh ? "" : " disabled") + ">안 본 카드만 (" + st.fresh + ")</button></div>" +
+    '<div class="actions"><button class="' + (st.due ? "primary" : "") + '" data-mode="due"' + (st.due ? "" : " disabled") + '>오늘 복습 (' + st.due + ')</button><button' + (st.due ? "" : ' class="primary"') + ' data-mode="all">전체 훈련 (' + st.total + ')</button><button data-mode="weak"' + (st.weak ? "" : " disabled") + '>약한 카드만 (' + st.weak + ')</button><button data-mode="fresh"' + (st.fresh ? "" : " disabled") + ">안 본 카드만 (" + st.fresh + ")</button>" + (function () { const n = d.cards.filter(c => freqOf(c).n >= 2).length; return '<button class="fq-btn" data-mode="freq"' + (n ? "" : " disabled") + ">자주 나온 카드 (" + n + ")</button>"; })() + "</div>" +
     '<p class="note" style="margin:-6px 2px 0">' + (st.due ? "오늘 복습할 카드 " + st.due + "장" : "오늘 복습할 카드 없음") + (st.soon1 ? " · 내일 " + st.soon1 + "장" : "") + (st.soon7 ? " · 7일 안에 " + st.soon7 + "장" : "") + "</p>" +
     '<div class="actions"><button data-ox>실전 O/X (' + oxItems(id).length + '지문)</button><button data-pairs' + ((window.TAX_PAIRS || {})[id] ? "" : " disabled") + '>헷갈리는 짝 (' + (((window.TAX_PAIRS || {})[id] || []).length) + '묶음)</button><button class="danger" data-reset' + (Object.keys(loadProg(id).cards).length ? "" : " disabled") + '>이 과목 기록 초기화</button></div>' +
     (st.oxR + st.oxW ? '<p class="note" style="margin:-6px 2px 0">실전 O/X 정답률 ' + Math.round(st.oxR / (st.oxR + st.oxW) * 100) + "% (" + st.oxR + " / " + (st.oxR + st.oxW) + ")</p>" : "") +
@@ -385,9 +420,10 @@ function startTrain(id, mode, sec) {
   if (mode === "weak") idx = idx.filter(i => { const c = p.cards[d.cards[i].id]; return c && c.last === 0; });
   if (mode === "fresh") idx = idx.filter(i => { const c = p.cards[d.cards[i].id]; return !c || c.last == null; });
   if (mode === "due") idx = idx.filter(i => isDue(p.cards[d.cards[i].id]));
+  if (mode === "freq") idx = idx.filter(i => freqOf(d.cards[i]).n >= 2).sort((a, b) => freqOf(d.cards[b]).n - freqOf(d.cards[a]).n || a - b);
   if (mode === "sec") idx = idx.filter(i => d.cards[i].s === sec);
   if (!idx.length) return;
-  const label = { all: "전체 훈련", weak: "약한 카드만", fresh: "안 본 카드만", sec: "절별 훈련", due: "오늘 복습" }[mode];
+  const label = { all: "전체 훈련", weak: "약한 카드만", fresh: "안 본 카드만", sec: "절별 훈련", due: "오늘 복습", freq: "자주 나온 카드" }[mode];
   S.train = newTrain(id, idx, label);
   renderTrain();
 }
@@ -473,7 +509,7 @@ function renderTrain() {
       '<div class="err" id="err" role="alert"></div><div id="res"></div>';
   }
   view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px">' + trainHead(T, s, c) +
-    '<div class="card">' + body + navHTML(T) + "</div></div></div>";
+    '<div class="card' + fqClass(c) + '">' + (fqBadge(c) ? '<div class="fq-row">' + fqBadge(c) + "</div>" : "") + body + navHTML(T) + "</div></div></div>";
   bindTrain();
   const inp = document.getElementById("in");
   if (inp) {
@@ -612,7 +648,7 @@ function renderOX() {
   view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px;max-width:820px">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button class="back" data-exit>← ' + esc(s.name) + ' 개요로</button><span class="note">실전 O/X · ' + esc(O.label) + " · " + (O.pos + 1) + "번째 / " + O.list.length + "</span></div>" +
     '<div class="progress"><div class="meter"><i style="width:' + (sc.done / O.list.length * 100) + '%"></i></div><span>정답 ' + sc.ok + " / 푼 " + sc.done + "</span></div>" +
-    '<div class="card">' + body + "</div></div>";
+    '<div class="card' + fqClass(c) + '">' + (fqBadge(c, !r) ? '<div class="fq-row">' + fqBadge(c, !r) + "</div>" : "") + body + "</div></div>";
   view.querySelector("[data-exit]").addEventListener("click", exitOX);
   view.querySelector("[data-prev]").addEventListener("click", () => { if (O.pos > 0) { O.pos--; renderOX(); } });
   view.querySelector("[data-next]").addEventListener("click", () => { O.pos++; renderOX(); window.scrollTo(0, 0); });
@@ -666,7 +702,7 @@ function renderPairs(id) {
       return '<div class="panel pair"><div class="pair-head"><h3>' + esc(g.title) + '</h3><button data-pg="' + gi + '">연달아 풀기 (' + rows.length + "장)</button></div>" +
         '<p class="pair-tip">' + esc(g.tip) + "</p>" +
         '<div class="ptable"><div class="prow phead"><span>항목</span><span>정답</span><span>자주 나오는 함정</span></div>' +
-        rows.map(c => '<div class="prow"><span>' + esc(c.sub) + '</span><span class="pans">' + esc(c.b) + '</span><span class="ptrap">' + esc(c.trap) + "</span></div>").join("") +
+        rows.map(c => '<div class="prow"><span>' + esc(c.sub) + " " + fqBadge(c, true) + '</span><span class="pans">' + esc(c.b) + '</span><span class="ptrap">' + esc(c.trap) + "</span></div>").join("") +
         (g.ref || []).map(r => '<div class="prow pref"><span>다른 과목 비교 · ' + esc(r) + "</span></div>").join("") + "</div></div>";
     }).join("") + "</div>";
   view.querySelector("[data-back]").addEventListener("click", () => renderSubject(id));
@@ -762,7 +798,7 @@ function bindDailyPanel() {
   const h = view.querySelector("[data-dhist]"); if (h) h.addEventListener("click", renderDailyHistory);
 }
 function goHome() { S.daily = null; S.train = null; S.ox = null; if (location.hash && location.hash !== "#home") location.hash = "home"; else renderHome(); window.scrollTo(0, 0); }
-function startDaily(day, practice, keys) {
+function startDaily(day, practice, keys, opt) {
   const pl = dailyStore().plans[day]; if (!pl && !keys) return;
   let list;
   if (keys) list = keys.slice();
@@ -770,7 +806,7 @@ function startDaily(day, practice, keys) {
   else { const r = pl.res; list = pl.cards.filter(k => !r[k]).concat(pl.cards.filter(k => r[k] && !r[k].last)); }
   if (!list.length) { renderDailyDay(day); return; }
   S.train = null; S.ox = null;
-  S.daily = { day, practice: !!practice, list, st: list.map(() => null), pos: 0, cur: null, okc: 0, n: new Set(list).size, lastTs: Date.now() };
+  S.daily = Object.assign({ day, practice: !!practice, list, st: list.map(() => null), pos: 0, cur: null, okc: 0, n: new Set(list).size, lastTs: Date.now() }, opt || {});
   renderDaily();
 }
 function renderDaily() {
@@ -778,7 +814,7 @@ function renderDaily() {
   if (Dy.pos >= Dy.list.length) { renderDailyEnd(); return; }
   const it = cardOf(Dy.list[Dy.pos]); if (!it) { Dy.pos++; renderDaily(); return; }
   const c = it.c, h = Dy.st[Dy.pos], pl = dailyStore().plans[Dy.day];
-  const prog = Dy.practice ? "다시 풀기 · 맞힘 " + Dy.okc + " / " + Dy.n : "맞힘 " + planStat(pl).okNow + " / " + pl.cards.length;
+  const prog = Dy.practice ? (Dy.kind === "freq" ? "맞힘 " : "다시 풀기 · 맞힘 ") + Dy.okc + " / " + Dy.n : "맞힘 " + planStat(pl).okNow + " / " + pl.cards.length;
   const pct = Dy.practice ? Dy.okc / Dy.n * 100 : planStat(pl).okNow / pl.cards.length * 100;
   Dy.cur = null;
   let body = '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><span><span class="chip">' + esc(it.s.name) + '</span> <span class="tag">함정 자리: ' + esc(c.t) + '</span></span><span class="note">' + esc(c.sub) + "</span></div>";
@@ -789,10 +825,10 @@ function renderDaily() {
   const last = Dy.pos >= Dy.list.length - 1;
   body += '<div class="nav"><button data-prev' + (Dy.pos > 0 ? "" : " disabled") + '>← 이전 문제</button><button data-next>' + (h ? (last ? "결과 보기 →" : "다음 문제 →") : (last ? "건너뛰고 결과 보기 →" : "건너뛰기 →")) + "</button></div>";
   view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px;max-width:820px">' +
-    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button class="back" data-exit>← 처음 화면</button><span class="note">오늘의 20문제 · ' + dayLabel(Dy.day) + " · " + (Dy.pos + 1) + "번째 / " + Dy.list.length + "</span></div>" +
+    '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button class="back" data-exit>← ' + (Dy.kind === "freq" ? "자주 나온 카드 목록" : "처음 화면") + '</button><span class="note">' + (Dy.label || "오늘의 20문제 · " + dayLabel(Dy.day)) + " · " + (Dy.pos + 1) + "번째 / " + Dy.list.length + "</span></div>" +
     '<div class="progress"><div class="meter"><i style="width:' + pct + '%"></i></div><span>' + prog + "</span></div>" +
-    '<div class="card">' + body + "</div></div>";
-  view.querySelector("[data-exit]").addEventListener("click", goHome);
+    '<div class="card' + fqClass(c) + '">' + (fqBadge(c) ? '<div class="fq-row">' + fqBadge(c) + "</div>" : "") + body + "</div></div>";
+  view.querySelector("[data-exit]").addEventListener("click", Dy.kind === "freq" ? () => renderFreq(Dy.filter) : goHome);
   view.querySelector("[data-prev]").addEventListener("click", () => { if (Dy.pos > 0) { Dy.pos--; renderDaily(); } });
   view.querySelector("[data-next]").addEventListener("click", () => { if (Dy.cur) dailyGrade(Dy.cur.good); else { Dy.pos++; renderDaily(); window.scrollTo(0, 0); } });
   const inp = document.getElementById("in");
@@ -840,6 +876,14 @@ function dailyGrade(ok) {
 function renderDailyEnd() {
   const Dy = S.daily;
   if (!Dy.practice) { renderDailyDay(Dy.day); return; }
+  if (Dy.kind === "freq") {
+    view.innerHTML = '<div class="card" style="display:flex;flex-direction:column;gap:12px;max-width:640px"><h2>' + esc(Dy.label) + " 완료 · 맞힘 " + Dy.okc + " / " + Dy.n + '</h2><p class="note" style="margin:0">결과는 과목별 기록과 복습 일정에 반영됩니다.</p>' +
+      '<div class="actions"><button class="primary" data-again>다시 섞어서 풀기</button><button data-list>자주 나온 카드 목록</button><button data-home>처음 화면</button></div></div>';
+    view.querySelector("[data-again]").addEventListener("click", () => startFreq(Dy.filter));
+    view.querySelector("[data-list]").addEventListener("click", () => renderFreq(Dy.filter));
+    view.querySelector("[data-home]").addEventListener("click", goHome);
+    return;
+  }
   view.innerHTML = '<div class="card" style="display:flex;flex-direction:column;gap:12px;max-width:640px"><h2>다시 풀기 완료 · 맞힘 ' + Dy.okc + " / " + Dy.n + '</h2><p class="note" style="margin:0">다시 풀기는 하루치 학습 기록을 바꾸지 않고, 과목별 복습 일정에만 반영됩니다.</p>' +
     '<div class="actions"><button class="primary" data-day>' + dayLabel(Dy.day) + " 기록으로</button><button data-home>처음 화면</button></div></div>";
   view.querySelector("[data-day]").addEventListener("click", () => renderDailyDay(Dy.day));
@@ -853,7 +897,7 @@ function renderDailyDay(day) {
     const it = cardOf(k), r = pl.res[k];
     if (!it) return "";
     const mark = !r ? '<span class="dmark none">안 풂</span>' : r.first ? '<span class="dmark ok">한 번에 맞힘</span>' : '<span class="dmark bad">' + (r.last ? r.tries + "번 만에 맞힘" : "아직 틀림") + "</span>";
-    return '<div class="drow"><span class="chip">' + esc(it.s.name) + '</span><span class="dq">' + esc(it.c.a) + "<b>" + esc(it.c.b) + "</b>" + esc(it.c.z) + "</span>" + mark + "</div>";
+    return '<div class="drow"><span class="chip">' + esc(it.s.name) + '</span><span class="dq">' + fqBadge(it.c, true) + " " + esc(it.c.a) + "<b>" + esc(it.c.b) + "</b>" + esc(it.c.z) + "</span>" + mark + "</div>";
   }).join("");
   const unsolved = !st.done;
   view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px;max-width:900px">' +
@@ -893,6 +937,47 @@ function renderDailyHistory() {
   view.querySelectorAll("[data-day]").forEach(b => b.addEventListener("click", () => renderDailyDay(+b.dataset.day)));
   const rb = view.querySelector("[data-dreset]");
   if (rb && !rb.disabled) armReset(rb, "하루치 학습 기록을 모두 지울까요?", () => { S.dailyStore = emptyDaily(); saveDaily(); renderDailyHistory(); });
+  window.scrollTo(0, 0);
+}
+
+/* ---------- 자주 나온 카드 (기출 2회 이상) ---------- */
+function freqCards(filter) {
+  const out = [];
+  readySubjects().forEach(s => { const d = S.data[s.id]; if (!d) return; d.cards.forEach((c, ci) => { const n = freqOf(c).n; if (n < 2) return; if (filter === "3" && n < 3) return; if (filter === "2" && n !== 2) return; out.push({ sid: s.id, s, c, n, key: s.id + ":" + c.id }); }); });
+  return out.sort((a, b) => b.n - a.n);
+}
+function freqLegend() {
+  return '<div class="fq-legend"><span class="fq f2">기출 2회</span><span class="fq f3">기출 3회</span><span class="fq f4">기출 4회 이상</span></div>';
+}
+function freqPanelHTML() {
+  if (!allLoaded()) return "";
+  const all = freqCards(), n3 = all.filter(x => x.n >= 3).length, n2 = all.filter(x => x.n === 2).length;
+  return '<div class="panel fq-panel"><div class="daily-top"><div><h3>여러 번 출제된 카드</h3><p class="note" style="margin:4px 0 0">2020~2026 기출 7회 중 같은 내용이 2번 이상 나온 카드 ' + all.length + "장 · 학습 화면에서도 색깔로 표시됩니다.</p></div>" + freqLegend() + "</div>" +
+    '<div class="actions" style="margin-top:10px"><button class="primary" data-fq="">모아 보기 (' + all.length + ')</button><button data-fq="3"' + (n3 ? "" : " disabled") + ">3회 이상 (" + n3 + ')</button><button data-fq="2"' + (n2 ? "" : " disabled") + ">2회 (" + n2 + ")</button></div></div>";
+}
+function startFreq(filter) {
+  const keys = shuffle(freqCards(filter).map(x => x.key));
+  const label = "자주 나온 카드" + (filter === "3" ? " · 3회 이상" : filter === "2" ? " · 2회" : "");
+  startDaily(today(), true, keys, { kind: "freq", label, filter });
+}
+function renderFreq(filter) {
+  S.daily = null; S.train = null; S.ox = null;
+  filter = filter || "";
+  const list = freqCards(filter), all = freqCards();
+  const tabs = [["", "전체", all.length], ["3", "3회 이상", all.filter(x => x.n >= 3).length], ["2", "2회", all.filter(x => x.n === 2).length]];
+  const bySub = {};
+  list.forEach(x => (bySub[x.sid] = bySub[x.sid] || []).push(x));
+  view.innerHTML = '<div style="display:flex;flex-direction:column;gap:14px;max-width:960px">' +
+    '<div><button class="back" data-home>← 처음 화면</button><h2 style="margin-top:6px">여러 번 출제된 카드</h2>' +
+    '<p class="lede">7년치 기출에서 같은 내용이 서로 다른 시험에 2번 이상 나온 카드입니다. 색깔이 진할수록 자주 나왔습니다. 배지에 마우스를 올리면 출제된 시험이 보입니다.</p></div>' +
+    '<div class="daily-top">' + '<div class="actions">' + tabs.map(([f, nm, n]) => '<button class="' + (f === filter ? "tab on" : "tab") + '" data-tab="' + f + '"' + (n ? "" : " disabled") + ">" + nm + " " + n + "</button>").join("") + "</div>" + freqLegend() + "</div>" +
+    '<div class="actions"><button class="primary" data-go' + (list.length ? "" : " disabled") + ">이 카드들 섞어서 풀기 (" + list.length + "장)</button></div>" +
+    readySubjects().filter(s => bySub[s.id]).map(s => '<div class="panel"><h3>' + esc(s.name) + ' <span class="note" style="font-weight:400">' + bySub[s.id].length + "장</span></h3>" +
+      bySub[s.id].map(x => '<div class="fq-item fqcard f' + fqLevel(x.n) + '"><div class="fq-row">' + fqBadge(x.c) + '<span class="note">' + esc(x.c.sub) + "</span></div>" +
+        '<div class="fq-sent">' + esc(x.c.a) + "<b>" + esc(x.c.b) + "</b>" + esc(x.c.z) + '</div><div class="note">함정: ' + esc(x.c.trap) + "</div></div>").join("") + "</div>").join("") + "</div>";
+  view.querySelector("[data-home]").addEventListener("click", goHome);
+  view.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => renderFreq(b.dataset.tab)));
+  const g = view.querySelector("[data-go]"); if (g && !g.disabled) g.addEventListener("click", () => startFreq(filter));
   window.scrollTo(0, 0);
 }
 
