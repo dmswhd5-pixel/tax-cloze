@@ -2,8 +2,8 @@
 window.TAX_SUBJECTS = [
   { id: "gukgi",   name: "국세기본법",   desc: "모든 세목에 공통으로 적용되는 규칙", file: "data/gukgi.js", ready: true },
   { id: "gukjing", name: "국세징수법",   desc: "고지 · 독촉 · 압류 · 매각 · 배분", file: "data/gukjing.js", ready: true },
+  { id: "bugase",  name: "부가가치세법", desc: "과세거래 · 영세율 · 세금계산서", file: "data/bugase.js", ready: true },
   { id: "sodeuk",  name: "소득세법",     desc: "개인의 종합 · 퇴직 · 양도소득", file: "data/sodeuk.js", ready: true },
   { id: "beobin",  name: "법인세법",     desc: "익금 · 손금 · 세무조정", file: "data/beobin.js", ready: true },
-  { id: "bugase",  name: "부가가치세법", desc: "과세거래 · 영세율 · 세금계산서", file: "data/bugase.js", ready: true },
   { id: "sangjeung", name: "상속세 · 종합부동산세", desc: "상속재산 · 상속공제 · 종부세", file: "data/sangjeung.js", ready: true }
 ];

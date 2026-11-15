@@ -1,6 +1,6 @@
 // 세법 빈칸 훈련 · 오프라인 저장 장치
 // 앱 파일은 휴대폰에 저장해 두고, 인터넷이 되면 최신 파일로 바꿔 둔다(네트워크 우선, 실패 시 저장본).
-const VERSION = "taxcloze-v1";
+const VERSION = "taxcloze-v2";
 const CORE = [
   "./", "index.html", "manifest.webmanifest",
   "data/subjects.js", "data/pairs.js", "data/gukgi.js", "data/gukjing.js", "data/sodeuk.js", "data/beobin.js", "data/bugase.js", "data/sangjeung.js",
