@@ -176,6 +176,34 @@ button.pr-btn{color:var(--pr);border-color:var(--pr)}
 .pr-item{border-left:5px solid var(--pr)}
 .pr-reason{font-size:14px;color:var(--pr);margin-top:4px;line-height:1.6}
 .prow .pr{margin-left:4px}
+.tl{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface)}
+.tl-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:10px}
+.tl-chart{position:relative;padding:0 2px}
+.tl-yrs{display:grid;grid-template-columns:1fr 1fr;font-size:11px;color:var(--muted);margin-bottom:4px}
+.tl-yrs span:last-child{border-left:1px dashed var(--line);padding-left:6px}
+.tl-row{position:relative;height:20px;margin-bottom:3px}
+.tl-band{position:absolute;top:0;height:20px;border-radius:4px;font-size:11px;line-height:20px;padding:0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.tl-band.base{background:var(--bg);color:var(--muted);border:1px solid var(--line)}
+.tl-band.hl{background:var(--accent-soft);color:var(--accent);font-weight:700;border:1px solid var(--accent)}
+.tl-line{position:relative;height:24px;margin:2px 0}
+.tl-line::before{content:"";position:absolute;left:0;right:0;top:11px;height:2px;background:var(--line);border-radius:1px}
+.tl-dot{position:absolute;top:2px;width:20px;height:20px;margin-left:-10px;border-radius:50%;background:var(--surface);border:2px solid var(--faint);color:var(--muted);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;box-sizing:border-box}
+.tl-dot.hl{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);z-index:1}
+.tl-months{display:grid;grid-template-columns:repeat(24,1fr);font-size:10px;color:var(--faint);text-align:center;font-variant-numeric:tabular-nums}
+.tl-months span:nth-child(12){border-right:1px dashed var(--line)}
+.tl-ends{display:flex;justify-content:space-between;font-size:11px;color:var(--faint)}
+.tl-leg{list-style:none;margin:10px 0 0;padding:0;font-size:13px;line-height:1.7;color:var(--muted)}
+.tl-leg li.hl{color:var(--ink);font-weight:700}
+.tl-n{display:inline-block;min-width:20px;color:var(--faint)}
+.tl-leg li.hl .tl-n{color:var(--accent)}
+.gl{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--surface);font-size:14px}
+.gl summary{cursor:pointer;font-size:13px;font-weight:700}
+.gl dl{margin:8px 0 0;display:grid;grid-template-columns:max-content 1fr;gap:5px 12px;line-height:1.6}
+.gl dt{font-weight:700;color:var(--accent)}
+.gl dd{margin:0;color:var(--ink)}
+.gl-bg{margin:10px 0 0;padding-top:8px;border-top:1px solid var(--line);color:var(--muted);line-height:1.65}
+.gl-bg b{color:var(--ink);margin-right:4px}
+@media (max-width:720px){.gl dl{grid-template-columns:1fr;gap:0}.gl dd{margin-bottom:6px}.tl-months span:nth-child(even){visibility:hidden}.tl-dot{width:15px;height:15px;margin-left:-7.5px;top:4.5px;font-size:9px;border-width:1.5px}}
 .reset-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
@@ -196,6 +224,8 @@ button.pr-btn{color:var(--pr);border-color:var(--pr)}
 <script src="data/subjects.js"></script>
 <script src="data/pairs.js"></script>
 <script src="data/practical.js"></script>
+<script src="data/timeline.js"></script>
+<script src="data/glossary.js"></script>
 <script>
 const TRAPS = {
   "숫자": "기간·횟수·금액 (14일, 2회)",
@@ -486,7 +516,7 @@ function resultHTML(c, v, j) {
   const L = JL[j];
   return '<div class="info"><div><span class="verdict v-' + L[0] + '">' + esc(v) + " → " + L[1] + "</span></div>" +
     '<div style="margin-top:6px"><span class="lab">이유</span>' + esc(c.why) + "</div>" +
-    '<div><span class="lab">비틀면</span>' + esc(c.trap) + "</div>" + (pracOf(c) ? '<div class="pr-why"><span class="lab">실무</span>' + esc(pracOf(c)) + "</div>" : "") + "</div>" + exHTML(c);
+    '<div><span class="lab">비틀면</span>' + esc(c.trap) + "</div>" + (pracOf(c) ? '<div class="pr-why"><span class="lab">실무</span>' + esc(pracOf(c)) + "</div>" : "") + "</div>" + exHTML(c) + tlHTML(c) + glossHTML(c);
 }
 function doneCount(T) { return Object.keys(T.ok).length; }
 function skippedPos(T) {
@@ -669,7 +699,7 @@ function renderOX() {
       (e.k === "X" ? '<div style="margin-top:6px"><span class="lab">고칠 곳</span><b style="color:var(--bad)">' + esc(e.w) + '</b> → <b style="color:var(--ok)">' + esc(c.b) + "</b>" + (e.note ? "<br>" + esc(e.note) : "") + "</div>" : "") +
       '<div><span class="lab">이유</span>' + esc(c.why) + "</div>" +
       (pracOf(c) ? '<div class="pr-why"><span class="lab">실무</span>' + esc(pracOf(c)) + "</div>" : "") +
-      '<div><span class="lab">빈칸 카드</span>' + esc(c.a) + "<b>" + esc(c.b) + "</b>" + esc(c.z) + "</div></div>";
+      '<div><span class="lab">빈칸 카드</span>' + esc(c.a) + "<b>" + esc(c.b) + "</b>" + esc(c.z) + "</div></div>" + tlHTML(c) + glossHTML(c);
   }
   const last = O.pos >= O.list.length - 1;
   body += '<div class="nav"><button data-prev' + (O.pos > 0 ? "" : " disabled") + '>← 이전 지문</button><button data-next>' + (r ? (last ? "결과 보기 →" : "다음 지문 →") : (last ? "건너뛰고 결과 보기 →" : "건너뛰기 →")) + "</button></div>";
@@ -1007,6 +1037,71 @@ function renderFreq(filter) {
   view.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => renderFreq(b.dataset.tab)));
   const g = view.querySelector("[data-go]"); if (g && !g.disabled) g.addEventListener("click", () => startFreq(filter));
   window.scrollTo(0, 0);
+}
+
+/* ---------- 과세기간 그래프 ---------- */
+const TL_BASE = {
+  vat: { bands: [["1-1", "6-30", "제1기"], ["7-1", "12-31", "제2기"]], marks: [["4-25", "1기 예정신고"], ["7-25", "1기 확정신고"], ["10-25", "2기 예정신고"], ["+1-25", "2기 확정신고"]] },
+  inc: { bands: [["1-1", "12-31", "과세기간"], ["+5-1", "+5-31", "확정신고"]], marks: [] },
+  corp: { bands: [["1-1", "12-31", "사업연도 (12월 결산 가정)"]], marks: [["+3-31", "법인세 신고 · 납부기한"]] },
+  wh: { bands: [["1-1", "12-31", "소득 지급 연도"]], marks: [] },
+  comp: { bands: [["12-1", "12-15", "종부세 납부"]], marks: [["6-1", "과세기준일"]] }
+};
+function tlPos(s, end) {
+  const plus = s[0] === "+", [m, d] = s.replace("+", "").split("-").map(Number);
+  const dim = new Date(2025, m, 0).getDate();
+  return ((plus ? 12 : 0) + (m - 1) + (end ? d : d - 1) / dim) / 24 * 100;
+}
+function tlDate(s) { const plus = s[0] === "+", [m, d] = s.replace("+", "").split("-"); return (plus ? "다음 해 " : "") + +m + "월 " + +d + "일"; }
+const CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
+function tlHTML(c) {
+  const sp = (window.TAX_TIMELINE || {})[c.id];
+  if (!sp) return "";
+  let chart = "", legend = [];
+  if (sp.k === "y") {
+    const base = TL_BASE[sp.tax] || { bands: [], marks: [] };
+    const hlDates = new Set((sp.hl || []).map(x => x[0]));
+    const marks = base.marks.filter(m => !hlDates.has(m[0])).map(m => ({ at: m[0], label: m[1], hl: false }))
+      .concat((sp.hl || []).map(m => ({ at: m[0], label: m[1], hl: true })))
+      .sort((a, b) => tlPos(a.at) - tlPos(b.at));
+    const band = (b, cls) => { const l = tlPos(b[0]), r = tlPos(b[1], true); return '<span class="tl-band ' + cls + '" style="left:' + l + "%;width:" + (r - l) + '%" title="' + esc(b[2]) + '">' + esc(b[2]) + "</span>"; };
+    chart = '<div class="tl-chart">' +
+      '<div class="tl-yrs"><span>올해</span><span>다음 해</span></div>' +
+      '<div class="tl-row">' + base.bands.map(b => band(b, "base")).join("") + "</div>" +
+      (sp.band ? '<div class="tl-row">' + sp.band.map(b => band(b, "hl")).join("") + "</div>" : "") +
+      '<div class="tl-line">' + marks.map((m, i) => '<span class="tl-dot' + (m.hl ? " hl" : "") + '" style="left:' + tlPos(m.at) + '%">' + (i + 1) + "</span>").join("") + "</div>" +
+      '<div class="tl-months">' + Array.from({ length: 24 }, (_, i) => "<span>" + ((i % 12) + 1) + "</span>").join("") + "</div></div>";
+    legend = marks.map((m, i) => '<li class="' + (m.hl ? "hl" : "") + '"><span class="tl-n">' + CIRC[i] + "</span>" + tlDate(m.at) + " · " + esc(m.label) + "</li>");
+    if (sp.band) legend = sp.band.map(b => '<li class="hl band"><span class="tl-n">▬</span>' + tlDate(b[0]) + " ~ " + tlDate(b[1]) + " · " + esc(b[2]) + "</li>").concat(legend);
+  } else {
+    const max = Math.max(...sp.pts.map(p => p[0])) || 1;
+    const hl = new Set(sp.hl || []);
+    const pos = v => 3 + v / max * 94;
+    chart = '<div class="tl-chart rel"><div class="tl-line">' + sp.pts.map((p, i) => '<span class="tl-dot' + (hl.has(i) ? " hl" : "") + '" style="left:' + pos(p[0]) + '%">' + (i + 1) + "</span>").join("") + "</div>" +
+      '<div class="tl-ends"><span>0' + sp.unit + "</span><span>" + max + sp.unit + "</span></div></div>";
+    legend = sp.pts.map((p, i) => '<li class="' + (hl.has(i) ? "hl" : "") + '"><span class="tl-n">' + CIRC[i] + "</span>" + (p[0] === 0 ? "기준일" : p[0] + sp.unit + " 뒤") + " · " + esc(p[1]) + "</li>");
+  }
+  return '<div class="tl"><div class="tl-h">' + (sp.k === "y" ? "1년 과세기간에서의 위치" : "기준일부터의 기간") + (sp.tax === "corp" ? ' <span class="note">· 12월 결산 법인 기준</span>' : "") + "</div>" + chart + '<ol class="tl-leg">' + legend.join("") + "</ol></div>";
+}
+
+/* ---------- 용어 풀이 · 배경지식 ---------- */
+let GL_PATS = null;
+function glossFind(text) {
+  const T = window.TAX_TERMS || [];
+  if (!GL_PATS) { GL_PATS = []; T.forEach((o, i) => (o.m || [o.t].concat(o.a)).forEach(s => GL_PATS.push([s, i]))); GL_PATS.sort((a, b) => b[0].length - a[0].length); }
+  let s = text; const hit = new Map();
+  for (const [pt, i] of GL_PATS) {
+    let k = s.indexOf(pt);
+    while (k >= 0) { if (!hit.has(i)) hit.set(i, k); s = s.slice(0, k) + "\u0000".repeat(pt.length) + s.slice(k + pt.length); k = s.indexOf(pt); }
+  }
+  return [...hit.entries()].sort((a, b) => a[1] - b[1]).map(e => T[e[0]]);
+}
+function glossHTML(c) {
+  const terms = glossFind(c.a + c.b + c.z).slice(0, 6), bg = (window.TAX_BG || {})[c.s];
+  if (!terms.length && !bg) return "";
+  return '<details class="gl" open><summary>용어 풀이 · 배경지식</summary>' +
+    (terms.length ? '<dl>' + terms.map(o => "<dt>" + esc(o.t) + "</dt><dd>" + esc(o.d) + "</dd>").join("") + "</dl>" : "") +
+    (bg ? '<p class="gl-bg"><b>배경</b> ' + esc(bg) + "</p>" : "") + "</details>";
 }
 
 /* ---------- 실무 중요 카드 ---------- */
