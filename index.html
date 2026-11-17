@@ -177,7 +177,8 @@ button.pr-btn{color:var(--pr);border-color:var(--pr)}
 .pr-reason{font-size:14px;color:var(--pr);margin-top:4px;line-height:1.6}
 .prow .pr{margin-left:4px}
 .tl{margin-top:12px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface)}
-.tl-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:10px}
+.tl-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:4px}
+.tl-cap{font-size:13px;color:var(--accent);margin-bottom:10px;line-height:1.5}
 .tl-chart{position:relative;padding:0 2px}
 .tl-yrs{display:grid;grid-template-columns:1fr 1fr;font-size:11px;color:var(--muted);margin-bottom:4px}
 .tl-yrs span:last-child{border-left:1px dashed var(--line);padding-left:6px}
@@ -225,6 +226,7 @@ button.pr-btn{color:var(--pr);border-color:var(--pr)}
 <script src="data/pairs.js"></script>
 <script src="data/practical.js"></script>
 <script src="data/timeline.js"></script>
+<script src="data/yearmap.js"></script>
 <script src="data/glossary.js"></script>
 <script>
 const TRAPS = {
@@ -1042,7 +1044,7 @@ function renderFreq(filter) {
 /* ---------- 과세기간 그래프 ---------- */
 const TL_BASE = {
   vat: { bands: [["1-1", "6-30", "제1기"], ["7-1", "12-31", "제2기"]], marks: [["4-25", "1기 예정신고"], ["7-25", "1기 확정신고"], ["10-25", "2기 예정신고"], ["+1-25", "2기 확정신고"]] },
-  inc: { bands: [["1-1", "12-31", "과세기간"], ["+5-1", "+5-31", "확정신고"]], marks: [] },
+  inc: { bands: [["1-1", "12-31", "과세기간"]], marks: [["+5-31", "종합소득세 확정신고 · 납부기한"]] },
   corp: { bands: [["1-1", "12-31", "사업연도 (12월 결산 가정)"]], marks: [["+3-31", "법인세 신고 · 납부기한"]] },
   wh: { bands: [["1-1", "12-31", "소득 지급 연도"]], marks: [] },
   comp: { bands: [["12-1", "12-15", "종부세 납부"]], marks: [["6-1", "과세기준일"]] }
@@ -1055,8 +1057,15 @@ function tlPos(s, end) {
 function tlDate(s) { const plus = s[0] === "+", [m, d] = s.replace("+", "").split("-"); return (plus ? "다음 해 " : "") + +m + "월 " + +d + "일"; }
 const CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫";
 function tlHTML(c) {
-  const sp = (window.TAX_TIMELINE || {})[c.id];
-  if (!sp) return "";
+  const own = (window.TAX_TIMELINE || {})[c.id], sec = (window.TAX_YEARMAP || {})[c.s];
+  const year = own && own.k === "y" ? Object.assign({ cap: sec && sec.k === "y" ? sec.cap : "" }, own) : sec;
+  const rel = own && own.k === "r" ? own : null;
+  let h = "";
+  if (year) h += tlSpecHTML(year, year.k === "y" ? "1년 중 언제 쓰이는 규정인가" : "언제 쓰이는 규정인가");
+  if (rel) h += tlSpecHTML(rel, "기준일부터의 기간");
+  return h;
+}
+function tlSpecHTML(sp, title) {
   let chart = "", legend = [];
   if (sp.k === "y") {
     const base = TL_BASE[sp.tax] || { bands: [], marks: [] };
@@ -1081,7 +1090,8 @@ function tlHTML(c) {
       '<div class="tl-ends"><span>0' + sp.unit + "</span><span>" + max + sp.unit + "</span></div></div>";
     legend = sp.pts.map((p, i) => '<li class="' + (hl.has(i) ? "hl" : "") + '"><span class="tl-n">' + CIRC[i] + "</span>" + (p[0] === 0 ? "기준일" : p[0] + sp.unit + " 뒤") + " · " + esc(p[1]) + "</li>");
   }
-  return '<div class="tl"><div class="tl-h">' + (sp.k === "y" ? "1년 과세기간에서의 위치" : "기준일부터의 기간") + (sp.tax === "corp" ? ' <span class="note">· 12월 결산 법인 기준</span>' : "") + "</div>" + chart + '<ol class="tl-leg">' + legend.join("") + "</ol></div>";
+  const taxNote = { corp: "12월 결산 법인 기준", inc: "개인 종합소득세 일정 기준", vat: "부가가치세 일정", wh: "원천징수 · 연말정산 일정", comp: "종합부동산세 일정" }[sp.tax];
+  return '<div class="tl"><div class="tl-h">' + title + (taxNote ? ' <span class="note">· ' + taxNote + "</span>" : "") + "</div>" + (sp.cap ? '<div class="tl-cap">' + esc(sp.cap) + "</div>" : "") + chart + (legend.length ? '<ol class="tl-leg">' + legend.join("") + "</ol>" : "") + "</div>";
 }
 
 /* ---------- 용어 풀이 · 배경지식 ---------- */

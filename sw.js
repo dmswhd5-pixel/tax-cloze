@@ -1,9 +1,9 @@
 // 세법 빈칸 훈련 · 오프라인 저장 장치
 // 앱 파일은 휴대폰에 저장해 두고, 인터넷이 되면 최신 파일로 바꿔 둔다(네트워크 우선, 실패 시 저장본).
-const VERSION = "taxcloze-v4";
+const VERSION = "taxcloze-v5";
 const CORE = [
   "./", "index.html", "manifest.webmanifest",
-  "data/subjects.js", "data/pairs.js", "data/practical.js", "data/timeline.js", "data/glossary.js", "data/gukgi.js", "data/gukjing.js", "data/sodeuk.js", "data/beobin.js", "data/bugase.js", "data/sangjeung.js",
+  "data/subjects.js", "data/pairs.js", "data/practical.js", "data/timeline.js", "data/yearmap.js", "data/glossary.js", "data/gukgi.js", "data/gukjing.js", "data/sodeuk.js", "data/beobin.js", "data/bugase.js", "data/sangjeung.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-64.png"
 ];
 self.addEventListener("install", e => {
